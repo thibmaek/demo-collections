@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "test:base": "TZ='Europe/Brussels' jest",
+    "test:coverage": "npm run test:base -- --coverage --silent --bail",
+    "lint": "eslint \"./src/**/*.js\"",
+    "flow:coverage": "flow-coverage-report"
+  },
+  "devDependencies": {
+    "eslint": "*",
+    "flow-coverage-report": "*",
+    "jest": "*"
+  }
+}
