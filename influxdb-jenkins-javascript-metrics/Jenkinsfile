@@ -1,0 +1,59 @@
+import groovy.transform.Field
+
+try {
+
+  stage('Checkout') {
+    checkout scm
+  }
+  
+  stage('Dependencies') {
+    sh "npm -v"
+    sh "npm ci"
+    
+    outdatedDep = sh (returnStdout: true, script: "npm outdated --long | grep \"dependencies\" | grep -v \"git\" | wc -l").trim()
+    outdatedDev = sh (returnStdout: true, script: "npm outdated --long | grep \"devDependencies\" | grep -v \"git\" | wc -l").trim()
+    post_influxdb('dependencies', "npm_dep_outdated=${outdatedDep} npm_devdep_outdated=${outdatedDev}")
+  }
+  
+  stage('Lint') {
+    sh "npm run lint > lint-results.log"
+    sh "cat lint-results.log"
+    
+    warnings = sh (returnStdout: true, script: "grep -E \"([0-9]+ warnings)\" lint-results.log | awk '{ print \$2 }'").trim()
+    fixme_count = sh (returnStdout: true, script: "git grep -EI \"FIXME\" src | wc -l").trim()
+    todo_count = sh (returnStdout: true, script: "git grep -EI \"TODO\" src | wc -l").trim()
+    post_influxdb('code_quality', "fixme_count=${fixme_count} todo_count=${todo_count} linter_warnings=${warnings}")
+  }
+  
+  stage('Tests') {
+    sh "mkdir -p coverage"
+    sh "npm run test:coverage > coverage/test-coverage.log"
+    sh "cat coverage/test-coverage.log"
+    
+    def testPercentage = sh (returnStdout: true, script: "grep 'All files' coverage/test-coverage.log | cut -c 122-126").trim()
+    post_influxdb('code_quality', "test_coverage=${testPercentage}")
+  }
+
+  post_influxdb('jenkins', 'build_succeeded=1')
+  
+} catch(error) {
+  
+  echo "ERROR: $error"
+  
+  if (error != 'hudson.AbortException: script returned exit code 143') {
+    post_influxdb('jenkins', 'build_failed=1')
+  }
+  
+  throw error
+  
+}
+
+def post_influxdb(measurement, fields) {
+  withCredentials([
+    string(credentialsId: 'ORBIT_INFLUX_HOST', variable: 'INF_HOST'),
+    string(credentialsId: 'ORBIT_INFLUX_USER', variable: 'INF_USER'),
+    string(credentialsId: 'ORBIT_INFLUX_PASS', variable: 'INF_PASS'),
+  ]) {
+    sh (label: "post_influxdb", script: "bash scripts/write_influxdb.sh ${measurement} ${fields}")
+  }
+}
