@@ -18,7 +18,7 @@ function get_changelog() {
   {
     echo "## $currentTag";
     echo "";
-    git log-short --no-merges "$currentTag...$previousTag" | grep -v "Upgrade to";
+    git log-short --no-merges "$currentTag...$previousTag";
     echo "";
   } > CHANGELOG
   echo "$prevChangelogContents" >> CHANGELOG
